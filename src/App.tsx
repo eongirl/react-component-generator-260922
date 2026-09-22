@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { PromptInput } from './components/PromptInput';
 import { ComponentCard } from './components/ComponentCard';
 import { useComponentGenerator } from './hooks/useComponentGenerator';
+import { loadJSON, saveJSON } from './lib/storage';
 import type { Provider } from './types';
 import './App.css';
 
@@ -10,14 +11,26 @@ const PROVIDER_CONFIG = {
   google: { label: 'Google', placeholder: 'AIza...' },
 } as const;
 
+const DEFAULT_API_KEYS: Record<Provider, string> = { anthropic: '', google: '' };
+
 function App() {
-  const [apiKey, setApiKey] = useState('');
+  const [apiKeys, setApiKeys] = useState<Record<Provider, string>>(() =>
+    loadJSON('apiKeys', DEFAULT_API_KEYS)
+  );
   const [showKey, setShowKey] = useState(false);
-  const [provider, setProvider] = useState<Provider>('google');
+  const [provider, setProvider] = useState<Provider>(() => loadJSON('provider', 'google'));
   const [envKeys, setEnvKeys] = useState<Record<Provider, boolean>>({
     anthropic: false,
     google: false,
   });
+
+  useEffect(() => {
+    saveJSON('apiKeys', apiKeys);
+  }, [apiKeys]);
+
+  useEffect(() => {
+    saveJSON('provider', provider);
+  }, [provider]);
   const { components, isLoading, error, generate, removeComponent, clearAll } =
     useComponentGenerator();
 
@@ -29,6 +42,7 @@ function App() {
   }, []);
 
   const hasEnvKey = envKeys[provider];
+  const apiKey = apiKeys[provider];
 
   const handleGenerate = (prompt: string) => {
     if (!apiKey.trim() && !hasEnvKey) {
@@ -36,11 +50,6 @@ function App() {
       return;
     }
     generate(prompt, apiKey || undefined, provider);
-  };
-
-  const handleProviderChange = (newProvider: Provider) => {
-    setProvider(newProvider);
-    setApiKey('');
   };
 
   const activeProvider = PROVIDER_CONFIG[provider].label;
@@ -96,7 +105,7 @@ function App() {
             <select
               id="provider"
               value={provider}
-              onChange={(e) => handleProviderChange(e.target.value as Provider)}
+              onChange={(e) => setProvider(e.target.value as Provider)}
             >
               {Object.entries(PROVIDER_CONFIG).map(([key, { label }]) => (
                 <option key={key} value={key}>
@@ -114,7 +123,9 @@ function App() {
                 id="api-key"
                 type={showKey ? 'text' : 'password'}
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) =>
+                  setApiKeys((prev) => ({ ...prev, [provider]: e.target.value }))
+                }
                 placeholder={
                   hasEnvKey
                     ? '서버 키 사용 중 (직접 입력으로 덮어쓰기 가능)'
